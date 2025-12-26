@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+birthdays.db
+.venv/
+settings.json
