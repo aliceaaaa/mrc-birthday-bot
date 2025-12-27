@@ -4,7 +4,7 @@ from datetime import date
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from config import BOT_TOKEN
-from db import init_db, save_birthday, save_gift_by_username, save_chat, get_chats, get_birthdays
+from db import init_db, save_birthday, save_gift_by_username, save_chat, get_chats, get_birthdays_in_month
 from app.scheduler import start_scheduler, send_reminders
 from core.utils import normalize_date_or_none, normalize_username_or_none
 
@@ -24,60 +24,54 @@ async def start(msg: types.Message):
 @dp.message(Command("add"))
 async def add_birthday_cmd(msg: types.Message):
     parts = msg.text.split() if msg.text else []
+    
     if len(parts) != 3:
         await msg.answer("Формат: /add @username DD.MM")
         return
+    
     user = normalize_username_or_none(parts[1])
     d = normalize_date_or_none(parts[2])
+    
     if not user:
         await msg.answer("Некорректный @username")
         return
+    
     if not d:
         await msg.answer("Некорректная дата")
         return
+    
     await save_birthday(user, d)
     await msg.answer(f"ДР @{user} сохранён: {d}")
 
 @dp.message(Command("month"))
 async def month_birthdays(msg: types.Message):
-    all_bds = await get_birthdays()
-    
     today = date.today()
-    mm = f"{today.month:02d}"
-    
+    rows = await get_birthdays_in_month(today.month)
+    items = []
+    for uname, d in rows:
+        if not d or len(d) != 5:
+            continue
+        try:
+            day_i = int(d[:2])
+        except ValueError:
+            continue
+        items.append((day_i, uname or "", d))
+    items.sort(key=lambda x: x[0])
+    if not items:
+        await msg.answer("В этом месяце дней рождения нет")
+        return
     month_names = {
         1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
         5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
         9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
     }
-    
-    items = []
-    
-    for uname, d in all_bds:
-        if not d or len(d) != 5:
-            continue
-        day, month = d.split(".")
-        if month == mm:
-            try:
-                day_i = int(day)
-            except ValueError:
-                continue
-            items.append((day_i, uname, d))
-            
-    items.sort(key=lambda x: x[0])
-    
-    if not items:
-        await msg.answer("В этом месяце дней рождения нет")
-        return
-    
     title = month_names.get(today.month, "")
     lines = [f"Дни рождения — {title}:"]
-    
-    for day_i, uname, d in items:
+    for _, uname, d in items:
         at = f"@{uname}" if uname else ""
         lines.append(f"{d} — {at}".rstrip())
-        
     await msg.answer("\n".join(lines))
+
 
 @dp.message()
 async def register_chat(msg: types.Message):

@@ -160,3 +160,14 @@ async def audit_and_fix_db():
             if fixed and fixed != d:
                 await db.execute("UPDATE birthdays SET date = ? WHERE user_id = ?", (fixed, uid))
         await db.commit()
+
+async def get_birthdays_in_month(mm: int):
+    m2 = f"{mm:02d}"
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("""
+            SELECT u.tg_username, b.date
+            FROM birthdays b
+            JOIN users u ON u.id = b.user_id
+            WHERE substr(b.date, 4, 2) = ?
+        """, (m2,))
+        return await cursor.fetchall()
