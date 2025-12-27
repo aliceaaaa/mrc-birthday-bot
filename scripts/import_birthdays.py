@@ -79,37 +79,39 @@ DATA = [
     ("Миша", "19.11", "@mishachris"),
 ]
 
-async def main():
+async def run_import_birthdays() -> tuple[int, int]:
     await init_db()
+    
+    inserted = 0
+    updated = 0
+    
     async with aiosqlite.connect(DB_NAME) as db:
         for name, date_str, tg_username in DATA:
             u = normalize_username_or_none(tg_username)
             d = normalize_date_or_none(date_str)
             
-            await db.execute(
-                "INSERT OR IGNORE INTO users (username, tg_username) VALUES (?, ?)",
-                (name, u)
-            )
+            await db.execute("INSERT OR IGNORE INTO users (username, tg_username) VALUES (?, ?)", (name, u))
             
             cursor = await db.execute("SELECT id FROM users WHERE username = ?", (name,))
             row = await cursor.fetchone()
             
-            if not row:
+            if not row or d is None:
                 continue
             
             user_id = row[0]
-            
-            if d is None:
-                continue
-            
             cursor = await db.execute("SELECT date FROM birthdays WHERE user_id = ?", (user_id,))
             exists = await cursor.fetchone()
             
             if exists:
                 await db.execute("UPDATE birthdays SET date = ? WHERE user_id = ?", (d, user_id))
+                updated += 1
             else:
                 await db.execute("INSERT INTO birthdays (user_id, date) VALUES (?, ?)", (user_id, d))
+                inserted += 1
         
         await db.commit()
+        
+    return inserted, updated
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(run_import_birthdays())

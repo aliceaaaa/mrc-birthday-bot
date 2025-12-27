@@ -1,7 +1,8 @@
+import os
 import aiosqlite
 from core.utils import normalize_date_or_none, normalize_username_or_none
 
-DB_NAME = "birthdays.db"
+DB_NAME = os.environ.get("DB_PATH", "birthdays.db")
 
 async def init_db():
     async with aiosqlite.connect(DB_NAME) as db:
@@ -171,3 +172,10 @@ async def get_birthdays_in_month(mm: int):
             WHERE substr(b.date, 4, 2) = ?
         """, (m2,))
         return await cursor.fetchall()
+
+async def count_birthdays() -> int:
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("SELECT COUNT(*) FROM birthdays")
+        row = await cursor.fetchone()
+        
+        return int(row[0]) if row else 0
