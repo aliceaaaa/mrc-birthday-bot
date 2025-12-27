@@ -82,12 +82,12 @@ DATA = [
 
 async def main():
     await init_db()
-
     async with aiosqlite.connect(DB_NAME) as db:
         for name, date, tg_username in DATA:
+            norm_username = tg_username.lstrip("@") if tg_username else None
             await db.execute(
                 "INSERT OR IGNORE INTO users (username, tg_username) VALUES (?, ?)",
-                (name, tg_username or None)
+                (name, norm_username)
             )
             cursor = await db.execute(
                 "SELECT id FROM users WHERE username = ?",
@@ -96,12 +96,22 @@ async def main():
             row = await cursor.fetchone()
             if not row:
                 continue
-
-            await db.execute(
-                "INSERT INTO birthdays (user_id, date) VALUES (?, ?)",
-                (row[0], date)
+            user_id = row[0]
+            cursor = await db.execute(
+                "SELECT date FROM birthdays WHERE user_id = ?",
+                (user_id,)
             )
-
+            exists = await cursor.fetchone()
+            if exists:
+                await db.execute(
+                    "UPDATE birthdays SET date = ? WHERE user_id = ?",
+                    (date, user_id)
+                )
+            else:
+                await db.execute(
+                    "INSERT INTO birthdays (user_id, date) VALUES (?, ?)",
+                    (user_id, date)
+                )
         await db.commit()
 
 asyncio.run(main())

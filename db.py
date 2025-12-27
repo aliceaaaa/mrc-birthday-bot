@@ -33,13 +33,9 @@ async def init_db():
 async def save_birthday(tg_username: str, date_str: str):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute(
-            """
-            INSERT OR IGNORE INTO users (tg_username)
-            VALUES (?)
-            """,
+            "INSERT OR IGNORE INTO users (tg_username) VALUES (?)",
             (tg_username,)
         )
-
         cursor = await db.execute(
             "SELECT id FROM users WHERE tg_username = ?",
             (tg_username,)
@@ -47,15 +43,11 @@ async def save_birthday(tg_username: str, date_str: str):
         row = await cursor.fetchone()
         if not row:
             return
-
         await db.execute(
             "INSERT OR REPLACE INTO birthdays (user_id, date) VALUES (?, ?)",
             (row[0], date_str)
         )
-
         await db.commit()
-
-
 
 async def get_birthdays():
     async with aiosqlite.connect(DB_NAME) as db:
@@ -66,14 +58,43 @@ async def get_birthdays():
         """)
         return await cursor.fetchall()
 
-async def save_gift(user_id: str, choice: str):
+async def save_gift(tg_username: str, choice: str):
     async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute(
+            "SELECT id FROM users WHERE tg_username = ?",
+            (tg_username,)
+        )
+        row = await cursor.fetchone()
+        if not row:
+            await db.execute(
+                "INSERT INTO users (tg_username) VALUES (?)",
+                (tg_username,)
+            )
+            cursor = await db.execute(
+                "SELECT id FROM users WHERE tg_username = ?",
+                (tg_username,)
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return
+        user_id = row[0]
         await db.execute(
             "INSERT OR REPLACE INTO gifts (user_id, choice) VALUES (?, ?)",
             (user_id, choice)
         )
         await db.commit()
-        
+
+async def get_gift(tg_username: str) -> str | None:
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("""
+            SELECT g.choice
+            FROM gifts g
+            JOIN users u ON u.id = g.user_id
+            WHERE u.tg_username = ?
+        """, (tg_username,))
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
 async def save_chat(chat_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute(
@@ -87,12 +108,3 @@ async def get_chats():
         cursor = await db.execute("SELECT chat_id FROM chats")
         rows = await cursor.fetchall()
         return [r[0] for r in rows]
-
-async def get_gift(user_id: int):
-    async with aiosqlite.connect(DB_NAME) as db:
-        cursor = await db.execute(
-            "SELECT choice FROM gifts WHERE user_id = ?",
-            (user_id,)
-        )
-        row = await cursor.fetchone()
-        return row[0] if row else "подарок ек выбран"

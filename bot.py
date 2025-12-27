@@ -3,7 +3,7 @@ import re
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from config import BOT_TOKEN
-from db import init_db, save_birthday, save_gift, save_chat
+from db import init_db, save_birthday, save_gift, save_chat, get_chats
 from scheduler import start_scheduler
 
 bot = Bot(BOT_TOKEN)
@@ -15,7 +15,7 @@ async def start(msg: types.Message):
     await msg.answer(
         "Я напомню о днях рождения.\n"
         "Команды:\n"
-        "/add DD.MM — добавить ДР"
+        "/add @username DD.MM — добавить ДР"
     )
 
 
@@ -41,25 +41,20 @@ async def add_birthday(msg: types.Message):
 
     await msg.answer(f"ДР @{tg_username} сохранён: {date_str}")
 
-  
+
 @dp.message()
 async def register_chat(msg: types.Message):
     await save_chat(msg.chat.id)
-    
-from db import get_chats
 
-@dp.callback_query(lambda cb: cb.data and cb.data.startswith("gift_"))
+
+@dp.callback_query(lambda cb: cb.data and cb.data.startswith("gift|"))
 async def choose_gift(cb: types.CallbackQuery):
-    _, tg_username, choice = cb.data.split("_") if cb.data else ""
-
+    _, tg_username, choice = cb.data.split("|", 2) if cb.data else ""
     await save_gift(tg_username, choice)
 
     chats = await get_chats()
     for chat_id in chats:
-        await bot.send_message(
-            chat_id=chat_id,
-            text=f"@{tg_username} выбрал подарок: {choice}"
-        )
+        await bot.send_message(chat_id, f"@{tg_username} выбрал подарок: {choice}")
 
     if cb.message:
         await bot.edit_message_reply_markup(
@@ -67,9 +62,7 @@ async def choose_gift(cb: types.CallbackQuery):
             message_id=cb.message.message_id,
             reply_markup=None
         )
-
     await cb.answer("Готово")
-
 
 
 async def main():
