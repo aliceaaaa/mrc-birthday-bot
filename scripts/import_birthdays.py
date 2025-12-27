@@ -1,8 +1,7 @@
 import asyncio
 import aiosqlite
-from db import init_db
-
-DB_NAME = "birthdays.db"
+from db import init_db, DB_NAME
+from core.utils import normalize_username_or_none, normalize_date_or_none
 
 DATA = [
     ("Степан Панов", "11.01", "@step1p"),
@@ -83,35 +82,34 @@ DATA = [
 async def main():
     await init_db()
     async with aiosqlite.connect(DB_NAME) as db:
-        for name, date, tg_username in DATA:
-            norm_username = tg_username.lstrip("@") if tg_username else None
+        for name, date_str, tg_username in DATA:
+            u = normalize_username_or_none(tg_username)
+            d = normalize_date_or_none(date_str)
+            
             await db.execute(
                 "INSERT OR IGNORE INTO users (username, tg_username) VALUES (?, ?)",
-                (name, norm_username)
+                (name, u)
             )
-            cursor = await db.execute(
-                "SELECT id FROM users WHERE username = ?",
-                (name,)
-            )
+            
+            cursor = await db.execute("SELECT id FROM users WHERE username = ?", (name,))
             row = await cursor.fetchone()
+            
             if not row:
                 continue
+            
             user_id = row[0]
-            cursor = await db.execute(
-                "SELECT date FROM birthdays WHERE user_id = ?",
-                (user_id,)
-            )
+            
+            if d is None:
+                continue
+            
+            cursor = await db.execute("SELECT date FROM birthdays WHERE user_id = ?", (user_id,))
             exists = await cursor.fetchone()
+            
             if exists:
-                await db.execute(
-                    "UPDATE birthdays SET date = ? WHERE user_id = ?",
-                    (date, user_id)
-                )
+                await db.execute("UPDATE birthdays SET date = ? WHERE user_id = ?", (d, user_id))
             else:
-                await db.execute(
-                    "INSERT INTO birthdays (user_id, date) VALUES (?, ?)",
-                    (user_id, date)
-                )
+                await db.execute("INSERT INTO birthdays (user_id, date) VALUES (?, ?)", (user_id, d))
+        
         await db.commit()
 
 asyncio.run(main())

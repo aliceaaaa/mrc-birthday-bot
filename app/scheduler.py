@@ -22,6 +22,7 @@ async def send_reminders(bot):
 
     for tg_username, date_str in birthdays:
         day, month = map(int, date_str.split("."))
+        
         try:
             birthday = date(today.year, month, day)
         except ValueError:
@@ -67,16 +68,22 @@ async def send_reminders(bot):
                 ]
             )
 
-        if delta == 7 and tg_username:
-            await bot.send_message(
-                chat_id=f"@{tg_username}",
-                text="Скоро у тебя день рождения 🎉\nКакой подарок ты бы хотел?",
-                reply_markup=keyboard
-            )
-
         for chat_id in chats:
-            await bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                reply_markup=keyboard
-            )
+            try:
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=keyboard
+                )
+            except Exception:
+                pass
+
+        if delta == 7 and tg_username:
+            try:
+                await bot.send_message(
+                    chat_id=f"@{tg_username}",
+                    text="Скоро у тебя день рождения 🎉\nКакой подарок ты бы хотел?",
+                    reply_markup=keyboard
+                )
+            except Exception:
+                pass
