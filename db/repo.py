@@ -179,3 +179,21 @@ async def count_birthdays() -> int:
         row = await cursor.fetchone()
         
         return int(row[0]) if row else 0
+
+async def get_birthday_by_username(tg_username: str) -> str | None:
+    norm_user = normalize_username_or_none(tg_username)
+    
+    if not norm_user:
+        return None
+    
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("""
+            SELECT b.date
+            FROM birthdays b
+            JOIN users u ON u.id = b.user_id
+            WHERE u.tg_username = ?
+        """, (norm_user,))
+        
+        row = await cursor.fetchone()
+        
+        return row[0] if row else None

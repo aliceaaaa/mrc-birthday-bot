@@ -4,7 +4,7 @@ from datetime import date
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from config import BOT_TOKEN
-from db import init_db, save_birthday, save_gift_by_username, save_chat, get_chats, get_birthdays_in_month, count_birthdays
+from db import init_db, save_birthday, save_gift_by_username, save_chat, get_chats, get_birthdays_in_month, count_birthdays, get_birthday_by_username
 from app.scheduler import start_scheduler, send_reminders
 from core.utils import normalize_date_or_none, normalize_username_or_none
 from scripts.import_birthdays import run_import_birthdays
@@ -20,6 +20,7 @@ async def start(msg: types.Message):
         "Команды:\n"
         "/add @username DD.MM — добавить ДР\n"
         "/month — ДР в этом месяце\n"
+        "/when @username — когда ДР\n"
         "/test — отправить тестовые напоминания\n"
         "/seed — импорт исходных данных\n"
         "/count — показать кол-во записей\n"
@@ -73,6 +74,56 @@ async def month_birthdays(msg: types.Message):
         lines.append(f"{d} — {at}".rstrip())
     await msg.answer("\n".join(lines))
 
+@dp.message(Command("when"))
+async def when_birthday(msg: types.Message):
+    parts = msg.text.split() if msg.text else []
+    
+    if len(parts) != 2:
+        await msg.answer("Формат: /when @username")
+        return
+    
+    user = normalize_username_or_none(parts[1])
+    
+    if not user:
+        await msg.answer("Некорректный @username")
+        return
+    
+    d = await get_birthday_by_username(user)
+    if not d:
+        await msg.answer(f"ДР для @{user} не найден")
+        return
+    
+    today = date.today()
+    day, month = map(int, d.split("."))
+    
+    try:
+        b = date(today.year, month, day)
+    except ValueError:
+        if month == 2 and day == 29:
+            b = date(today.year, 2, 28)
+        else:
+            await msg.answer(f"Дата в базе некорректна: {d}")
+            return
+    if b < today:
+        try:
+            b = b.replace(year=today.year + 1)
+        except ValueError:
+            if month == 2 and day == 29:
+                b = date(today.year + 1, 2, 28)
+            else:
+                await msg.answer(f"Дата в базе некорректна: {d}")
+                return
+            
+    delta = (b - today).days
+    
+    if delta == 0:
+        text = f"Сегодня ДР у @{user} 🎉 ({d})"
+    elif delta == 1:
+        text = f"Завтра ДР у @{user} ({d})"
+    else:
+        text = f"ДР @{user}: {d} (через {delta} дней)"
+        
+    await msg.answer(text)
 
 @dp.message()
 async def register_chat(msg: types.Message):
