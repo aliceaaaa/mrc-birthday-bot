@@ -1,10 +1,16 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from datetime import date
-from zoneinfo import ZoneInfo
+from datetime import date, timezone
+try:
+    from zoneinfo import ZoneInfo
+    TZ = ZoneInfo("Asia/Tbilisi")
+except Exception:
+    TZ = timezone.utc
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from db import get_birthdays, get_chats
 
-scheduler = AsyncIOScheduler(timezone=ZoneInfo("Asia/Tbilisi"))
+
+scheduler = AsyncIOScheduler(timezone=TZ)
+
 
 def start_scheduler(bot):
     scheduler.add_job(
@@ -15,16 +21,19 @@ def start_scheduler(bot):
     )
     scheduler.start()
 
+
 async def send_reminders(bot, force: bool = False, target_chat_id: int | None = None):
     birthdays = await get_birthdays()
     chats = [target_chat_id] if target_chat_id else await get_chats()
     today = date.today()
     sent = 0
+    failed = 0
 
     for tg_username, date_str in birthdays:
         try:
             day, month = map(int, date_str.split("."))
         except Exception:
+            failed += 1
             continue
 
         try:
@@ -33,6 +42,7 @@ async def send_reminders(bot, force: bool = False, target_chat_id: int | None = 
             if month == 2 and day == 29:
                 birthday = date(today.year, 2, 28)
             else:
+                failed += 1
                 continue
 
         if birthday < today:
@@ -42,6 +52,7 @@ async def send_reminders(bot, force: bool = False, target_chat_id: int | None = 
                 if month == 2 and day == 29:
                     birthday = date(today.year + 1, 2, 28)
                 else:
+                    failed += 1
                     continue
 
         delta = (birthday - today).days
@@ -82,7 +93,7 @@ async def send_reminders(bot, force: bool = False, target_chat_id: int | None = 
                     reply_markup=keyboard
                 )
             except Exception:
-                pass
+                failed += 1
 
         for chat_id in chats:
             try:
@@ -93,6 +104,6 @@ async def send_reminders(bot, force: bool = False, target_chat_id: int | None = 
                 )
                 sent += 1
             except Exception:
-                pass
+                failed += 1
 
-    return sent
+    return sent, failed
