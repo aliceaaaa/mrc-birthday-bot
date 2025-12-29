@@ -30,6 +30,10 @@ from scripts.import_birthdays import run_import_birthdays
 bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
 
+@dp.message(Command("ping"))
+async def ping(msg: types.Message):
+    await msg.answer("pong")
+
 
 @dp.message(Command("start"))
 async def start(msg: types.Message):
@@ -215,16 +219,24 @@ async def register_chat(msg: types.Message):
 
 
 async def main():
-    await init_db()
+    try:
+        await init_db()
+    except Exception as e:
+        import logging
+        logging.exception("init_db failed")
+
     await bot.delete_webhook(drop_pending_updates=True)
 
     me = await bot.get_me()
     import logging
     logging.info("BOT READY: @%s (id=%s)", me.username, me.id)
 
-    if await count_birthdays() == 0:
-        ins, upd = await run_import_birthdays()
-        logging.info("SEED: inserted=%s updated=%s", ins, upd)
+    try:
+        if await count_birthdays() == 0:
+            ins, upd = await run_import_birthdays()
+            logging.info("SEED: inserted=%s updated=%s", ins, upd)
+    except Exception:
+        logging.exception("seed failed")
 
     start_scheduler(bot)
     await dp.start_polling(

@@ -1,10 +1,12 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from datetime import date, timezone
+from datetime import date, timezone, timedelta
+
 try:
     from zoneinfo import ZoneInfo
     TZ = ZoneInfo("Asia/Tbilisi")
 except Exception:
-    TZ = timezone.utc
+    TZ = timezone(timedelta(hours=4), name="Asia/Tbilisi")
+
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from db import get_birthdays, get_chats
 
@@ -17,6 +19,7 @@ def start_scheduler(bot):
         send_reminders,
         "cron",
         hour=10,
+        minute=18,
         args=[bot]
     )
     scheduler.start()
