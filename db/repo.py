@@ -3,15 +3,36 @@ import asyncpg
 from core.utils import normalize_date_or_none, normalize_username_or_none
 
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+def _normalize_db_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+        
+    if (
+        "railway.internal" not in url
+        and "localhost" not in url
+        and "127.0.0.1" not in url
+        and "sslmode=" not in url
+    ):
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}sslmode=require"
+    return url
+
+
+DATABASE_URL = _normalize_db_url(os.environ.get("DATABASE_URL"))
 
 _pool: asyncpg.Pool | None = None
-
 
 async def _get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5, ssl=True)
+        _pool = await asyncpg.create_pool(
+            DATABASE_URL,
+            min_size=1,
+            max_size=5,
+        )
     return _pool
 
 async def init_db():
