@@ -1,5 +1,5 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from datetime import date, timezone, timedelta
+from datetime import date, timezone, timedelta, datetime
 
 try:
     from zoneinfo import ZoneInfo
@@ -10,18 +10,30 @@ except Exception:
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from db import get_birthdays, get_chats
 
-
 scheduler = AsyncIOScheduler(timezone=TZ)
-
 
 def start_scheduler(bot):
     scheduler.add_job(
         send_reminders,
         "cron",
         hour=10,
-        minute=18,
-        args=[bot]
+        minute=25,
+        args=[bot],
+        id="daily_reminders",
+        replace_existing=True,
+        misfire_grace_time=3600,     
+        coalesce=True,              
     )
+    
+    scheduler.add_job(
+        send_reminders,
+        "date",
+        run_date=datetime.now(TZ) + timedelta(seconds=5),
+        args=[bot],
+        id="startup_kick",
+        replace_existing=True,
+    )
+    
     scheduler.start()
 
 
