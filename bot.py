@@ -1,3 +1,12 @@
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
+logging.getLogger("aiogram").setLevel(logging.INFO)
+logging.getLogger("aiohttp.client").setLevel(logging.WARNING)
+
 import asyncio
 from datetime import date
 from aiogram import Bot, Dispatcher, types
@@ -209,12 +218,19 @@ async def main():
     await init_db()
     await bot.delete_webhook(drop_pending_updates=True)
 
+    me = await bot.get_me()
+    import logging
+    logging.info("BOT READY: @%s (id=%s)", me.username, me.id)
+
     if await count_birthdays() == 0:
-        await run_import_birthdays()
+        ins, upd = await run_import_birthdays()
+        logging.info("SEED: inserted=%s updated=%s", ins, upd)
 
     start_scheduler(bot)
-    await dp.start_polling(bot)
-
+    await dp.start_polling(
+        bot,
+        allowed_updates=dp.resolve_used_update_types(),
+    )
 
 if __name__ == "__main__":
     asyncio.run(main())
