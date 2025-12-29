@@ -8,7 +8,7 @@ logging.getLogger("aiogram").setLevel(logging.INFO)
 logging.getLogger("aiohttp.client").setLevel(logging.WARNING)
 
 import asyncio
-from datetime import date
+from datetime import date, datetime, timezone, timedelta
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from config import BOT_TOKEN
@@ -26,6 +26,11 @@ from app.scheduler import start_scheduler, send_reminders
 from core.utils import normalize_date_or_none, normalize_username_or_none
 from scripts.import_birthdays import run_import_birthdays
 
+try:
+    from zoneinfo import ZoneInfo
+    TZ = ZoneInfo("Asia/Tbilisi")
+except Exception:
+    TZ = timezone(timedelta(hours=4), name="Asia/Tbilisi")
 
 bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
@@ -75,7 +80,7 @@ async def add_birthday_cmd(msg: types.Message):
 
 @dp.message(Command("month"))
 async def month_birthdays(msg: types.Message):
-    today = date.today()
+    today = datetime.now(TZ).date()
     rows = await get_birthdays_in_month(today.month)
     items = []
     for uname, d in rows:
@@ -134,7 +139,7 @@ async def when_birthday(msg: types.Message):
         await msg.answer(f"ДР для @{user} не найден")
         return
 
-    today = date.today()
+    today = datetime.now(TZ).date()
     day, month = map(int, d.split("."))
     try:
         b = date(today.year, month, day)

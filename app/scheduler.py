@@ -17,30 +17,22 @@ def start_scheduler(bot):
         send_reminders,
         "cron",
         hour=10,
-        minute=25,
+        minute=42,
+        second=0,
         args=[bot],
         id="daily_reminders",
         replace_existing=True,
-        misfire_grace_time=3600,     
-        coalesce=True,              
+        misfire_grace_time=3600,
+        coalesce=True,
+        max_instances=1,
     )
-    
-    scheduler.add_job(
-        send_reminders,
-        "date",
-        run_date=datetime.now(TZ) + timedelta(seconds=5),
-        args=[bot],
-        id="startup_kick",
-        replace_existing=True,
-    )
-    
     scheduler.start()
 
 
 async def send_reminders(bot, force: bool = False, target_chat_id: int | None = None):
     birthdays = await get_birthdays()
     chats = [target_chat_id] if target_chat_id else await get_chats()
-    today = date.today()
+    today = datetime.now(TZ).date()
     sent = 0
     failed = 0
 

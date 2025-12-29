@@ -1,6 +1,12 @@
 import asyncio
-from datetime import date
+from datetime import date, datetime, timezone, timedelta
 from db import init_db, get_birthdays
+
+try:
+    from zoneinfo import ZoneInfo
+    TZ = ZoneInfo("Asia/Tbilisi")
+except Exception:
+    TZ = timezone(timedelta(hours=4), name="Asia/Tbilisi")
 
 def next_birthday(day: int, month: int, today: date) -> date:
     try:
@@ -23,7 +29,7 @@ def next_birthday(day: int, month: int, today: date) -> date:
 async def main(days_ahead: int = 30):
     await init_db()
     
-    today = date.today()
+    today = datetime.now(TZ).date()
     rows_out = []
     rows = await get_birthdays()
     
