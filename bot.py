@@ -1,9 +1,8 @@
 import asyncio
+import re
 from datetime import date
-from aiogram.filters.command import CommandObject
-from aiogram.filters import Command
-from aiogram.filters import Command
 from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
 from config import BOT_TOKEN
 from db import init_db, save_birthday, save_gift_by_username, save_chat, get_chats, get_birthdays_in_month, count_birthdays, get_birthday_by_username
 from app.scheduler import start_scheduler, send_reminders
@@ -76,21 +75,27 @@ async def month_birthdays(msg: types.Message):
     await msg.answer("\n".join(lines))
 
 @dp.message(Command("when"))
-async def when_birthday(msg: types.Message, command: CommandObject):
-    raw = (command.args or "").strip()
-    if not raw:
+async def when_birthday(msg: types.Message):
+    parts = msg.text.split() if msg.text else []
+    
+    if len(parts) != 2:
         await msg.answer("Формат: /when @username")
         return
+    
+    raw = parts[1].strip()
     if raw.startswith("@"):
         raw = raw[1:]
     user = normalize_username_or_none(raw)
+    
     if not user:
         await msg.answer("Некорректный @username")
         return
+    
     d = await get_birthday_by_username(user)
     if not d:
         await msg.answer(f"ДР для @{user} не найден")
         return
+    
     today = date.today()
     day, month = map(int, d.split("."))
     try:
@@ -118,11 +123,6 @@ async def when_birthday(msg: types.Message, command: CommandObject):
     else:
         text = f"ДР @{user}: {d} (через {delta} дней)"
     await msg.answer(text)
-
-
-@dp.message()
-async def register_chat(msg: types.Message):
-    await save_chat(msg.chat.id)
 
 @dp.callback_query(lambda cb: cb.data and cb.data.startswith("gift|"))
 async def choose_gift(cb: types.CallbackQuery):
@@ -162,9 +162,11 @@ async def count_cmd(msg: types.Message):
 @dp.message(Command("dbpath"))
 async def dbpath(msg: types.Message):
     from db import DB_NAME
-    import os
     await msg.answer(f"DB_PATH={os.environ.get('DB_PATH','(not set)')}\nDB_NAME={DB_NAME}")
 
+@dp.message()
+async def register_chat(msg: types.Message):
+    await save_chat(msg.chat.id)
 
 async def main():
     await init_db()
