@@ -146,8 +146,8 @@ async def choose_gift(cb: types.CallbackQuery):
 
 @dp.message(Command("test"))
 async def test(msg: types.Message):
-    await send_reminders(bot)
-    await msg.answer("Отправил тестовые напоминания")
+    n = await send_reminders(bot, force=True, target_chat_id=msg.chat.id)
+    await msg.answer(f"Отправил тестовые напоминания: {n}")
 
 @dp.message(Command("seed"))
 async def seed(msg: types.Message):

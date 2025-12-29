@@ -15,10 +15,11 @@ def start_scheduler(bot):
     )
     scheduler.start()
 
-async def send_reminders(bot):
+async def send_reminders(bot, force: bool = False, target_chat_id: int | None = None):
     birthdays = await get_birthdays()
-    chats = await get_chats()
+    chats = [target_chat_id] if target_chat_id else await get_chats()
     today = date.today()
+    sent = 0
 
     for tg_username, date_str in birthdays:
         try:
@@ -44,16 +45,17 @@ async def send_reminders(bot):
                     continue
 
         delta = (birthday - today).days
-        if delta not in (7, 1, 0):
+        if not force and delta not in (7, 1, 0):
             continue
 
-        text = (
-            f"Через 7 дней ДР у @{tg_username}"
-            if delta == 7 else
-            f"Завтра ДР у @{tg_username}"
-            if delta == 1 else
-            f"Сегодня ДР у @{tg_username} 🎉"
-        )
+        if delta == 7:
+            text = f"Через 7 дней ДР у @{tg_username}"
+        elif delta == 1:
+            text = f"Завтра ДР у @{tg_username}"
+        elif delta == 0:
+            text = f"Сегодня ДР у @{tg_username} 🎉"
+        else:
+            text = f"Тест: ДР у @{tg_username} {date_str}"
 
         keyboard = None
         if tg_username:
@@ -72,16 +74,25 @@ async def send_reminders(bot):
                 ]
             )
 
-        if delta == 7 and tg_username:
-            await bot.send_message(
-                chat_id=f"@{tg_username}",
-                text="Скоро у тебя день рождения 🎉\nКакой подарок ты бы хотел?",
-                reply_markup=keyboard
-            )
+        if not force and delta == 7 and tg_username:
+            try:
+                await bot.send_message(
+                    chat_id=f"@{tg_username}",
+                    text="Скоро у тебя день рождения 🎉\nКакой подарок ты бы хотел?",
+                    reply_markup=keyboard
+                )
+            except Exception:
+                pass
 
         for chat_id in chats:
-            await bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                reply_markup=keyboard
-            )
+            try:
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=keyboard
+                )
+                sent += 1
+            except Exception:
+                pass
+
+    return sent
