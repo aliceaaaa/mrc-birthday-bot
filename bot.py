@@ -170,21 +170,30 @@ async def when_birthday(msg: types.Message):
 
 @dp.callback_query(lambda cb: cb.data and cb.data.startswith("gift|"))
 async def choose_gift(cb: types.CallbackQuery):
-    _, tg_username, choice = cb.data.split("|", 2) if cb.data else ""
+    _, raw_username, choice = cb.data.split("|", 2) if cb.data else ""
+    from core.utils import normalize_username_or_none
 
-    await save_gift_by_username(tg_username, choice)
+    target = normalize_username_or_none(raw_username) or ""
+    clicker = normalize_username_or_none(cb.from_user.username) or ""
 
-    chats = await get_chats()
+    if not clicker or clicker != target:
+        await cb.answer(f"Эта кнопка только для @{target}", show_alert=True)
+        return
 
-    for chat_id in chats:
-        await bot.send_message(chat_id, f"@{tg_username} выбрал подарок: {choice}")
+    await save_gift_by_username(target, choice)
+
+    for chat_id in await get_chats():
+        await bot.send_message(chat_id, f"@{target} выбрал подарок: {choice}")
 
     if cb.message:
-        await bot.edit_message_reply_markup(
-            chat_id=cb.message.chat.id,
-            message_id=cb.message.message_id,
-            reply_markup=None
-        )
+        try:
+            await bot.edit_message_reply_markup(
+                chat_id=cb.message.chat.id,
+                message_id=cb.message.message_id,
+                reply_markup=None
+            )
+        except Exception:
+            pass
 
     await cb.answer("Готово")
 
