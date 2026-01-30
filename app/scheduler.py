@@ -16,8 +16,8 @@ def start_scheduler(bot):
     scheduler.add_job(
         send_reminders,
         "cron",
-        hour=11,
-        minute=10,
+        hour=9,
+        minute=00,
         second=0,
         args=[bot],
         id="daily_reminders",
