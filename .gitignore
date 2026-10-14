@@ -3,3 +3,4 @@ __pycache__/
 birthdays.db
 .venv/
 settings.json
+.pytest_cache/

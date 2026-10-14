@@ -1,6 +1,8 @@
 import os
+from datetime import datetime
+
 import asyncpg
-from core.utils import normalize_date_or_none, normalize_username_or_none
+from core.utils import TZ, gift_year, normalize_date_or_none, normalize_username_or_none
 
 
 def _normalize_db_url(url: str | None) -> str | None:
@@ -65,7 +67,33 @@ async def init_db():
         await con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_tg ON users(tg_username)")
         await con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_birthdays_user ON birthdays(user_id)")
         await con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_gifts_user ON gifts(user_id)")
+        # Год ДР, к которому относится выбор подарка: каждый год выбираем заново
+        await con.execute("ALTER TABLE gifts ADD COLUMN IF NOT EXISTS year INTEGER")
+        await con.execute("""
+        CREATE TABLE IF NOT EXISTS bot_state (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+        """)
     await audit_and_fix_db()
+    await _backfill_gift_years()
+
+
+async def _backfill_gift_years():
+    """Старые выборы подарка (сделанные до появления колонки year) привязываем
+    к ДР, ради которого их сделали."""
+    today = datetime.now(TZ).date()
+    pool = await _get_pool()
+    async with pool.acquire() as con:
+        rows = await con.fetch("""
+            SELECT g.user_id, b.date
+            FROM gifts g
+            LEFT JOIN birthdays b ON b.user_id = g.user_id
+            WHERE g.year IS NULL
+        """)
+        for r in rows:
+            year = gift_year(r["date"], today)
+            await con.execute("UPDATE gifts SET year=$1 WHERE user_id=$2", year, r["user_id"])
 
 
 async def save_birthday(tg_username: str, date_str: str):
@@ -99,7 +127,20 @@ async def get_birthdays():
         return [(r["tg_username"], r["date"]) for r in rows]
 
 
-async def save_gift_by_username(tg_username: str, choice: str):
+async def delete_birthday(tg_username: str) -> bool:
+    norm_user = normalize_username_or_none(tg_username)
+    if not norm_user:
+        return False
+    pool = await _get_pool()
+    async with pool.acquire() as con:
+        res = await con.execute("""
+            DELETE FROM birthdays
+            WHERE user_id = (SELECT id FROM users WHERE tg_username=$1)
+        """, norm_user)
+        return res != "DELETE 0"
+
+
+async def save_gift_by_username(tg_username: str, choice: str, year: int):
     norm_user = normalize_username_or_none(tg_username)
     if not norm_user:
         return
@@ -112,12 +153,12 @@ async def save_gift_by_username(tg_username: str, choice: str):
             if not row:
                 return
         await con.execute("""
-            INSERT INTO gifts(user_id, choice) VALUES($1, $2)
-            ON CONFLICT (user_id) DO UPDATE SET choice=EXCLUDED.choice
-        """, row["id"], choice)
+            INSERT INTO gifts(user_id, choice, year) VALUES($1, $2, $3)
+            ON CONFLICT (user_id) DO UPDATE SET choice=EXCLUDED.choice, year=EXCLUDED.year
+        """, row["id"], choice, year)
 
 
-async def get_gift_by_username(tg_username: str) -> str | None:
+async def get_gift_by_username(tg_username: str, year: int) -> str | None:
     norm_user = normalize_username_or_none(tg_username)
     if not norm_user:
         return None
@@ -127,8 +168,8 @@ async def get_gift_by_username(tg_username: str) -> str | None:
             SELECT g.choice
             FROM gifts g
             JOIN users u ON u.id = g.user_id
-            WHERE u.tg_username=$1
-        """, norm_user)
+            WHERE u.tg_username=$1 AND g.year=$2
+        """, norm_user, year)
         return row["choice"] if row else None
 
 
@@ -196,3 +237,19 @@ async def get_birthday_by_username(tg_username: str) -> str | None:
             WHERE u.tg_username=$1
         """, norm_user)
         return row["date"] if row else None
+
+
+async def get_state(key: str) -> str | None:
+    pool = await _get_pool()
+    async with pool.acquire() as con:
+        row = await con.fetchrow("SELECT value FROM bot_state WHERE key=$1", key)
+        return row["value"] if row else None
+
+
+async def set_state(key: str, value: str):
+    pool = await _get_pool()
+    async with pool.acquire() as con:
+        await con.execute("""
+            INSERT INTO bot_state(key, value) VALUES($1, $2)
+            ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value
+        """, key, value)
